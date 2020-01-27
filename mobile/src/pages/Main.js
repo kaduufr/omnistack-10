@@ -5,6 +5,7 @@ import { requestPermissionsAsync, getCurrentPositionAsync } from 'expo-location'
 import { MaterialIcons } from '@expo/vector-icons'
 
 import api from '../services/api'
+import {connect, disconnect, subscriveToNewDevs } from '../services/socket'
 
 function Main( {navigation} ) {
 
@@ -14,37 +15,58 @@ function Main( {navigation} ) {
 
   const [techs, setTechs] = useState('')
 
-  useEffect(()=> {
+  useEffect(() => {
     async function loadInitialPosition() {
       const { granted } = await requestPermissionsAsync();
+
       if (granted) {
         const { coords } = await getCurrentPositionAsync({
-          enableHighAccuracy: true
-        })
-        const { latitude, longitude } = coords
+          enableHighAccuracy: true,
+        });
+
+        const { latitude, longitude } = coords;
 
         setCurrentRegion({
           latitude,
           longitude,
           latitudeDelta: 0.04,
-          longitudeDelta: 0.04
+          longitudeDelta: 0.04,
         })
       }
-    } 
-    loadInitialPosition()
-  },[])
+    }
+
+    loadInitialPosition();
+  }, []);
+
+  useEffect(()=>{
+    subscriveToNewDevs(dev => setDevs([...devs, dev]))
+  }, [devs])
+
+  function setupWebSocket() {
+    disconnect();
+
+    const { latitude, longitude } = currentRegion
+
+    connect(
+      latitude,
+      longitude,
+      techs
+    )
+  }
 
   async function loadDevs() {
-      const { latitude , longitude } = currentRegion
+    const { latitude, longitude } = currentRegion;
 
-      const response = await api.get('/search', {
-          params: {
-              latitude,
-              longitude,
-              techs
-          }
-      })
-      setDevs(response.data.devs)
+    const response = await api.get('/search', {
+      params: {
+        latitude,
+        longitude,
+        techs
+      }
+    });
+    
+    setDevs(response.data.devs);
+    setupWebSocket()
   }
 
   function handleRegionChanged(region) {
@@ -64,7 +86,7 @@ function Main( {navigation} ) {
             initialRegion={currentRegion} 
             style={styles.map}
         >
-            {devs.map(dev => {
+            {devs.map(dev => (
                 <Marker 
                     key={dev._id}
                     coordinate={{
@@ -85,7 +107,7 @@ function Main( {navigation} ) {
                         </View>
                     </Callout>
                 </Marker>
-            })}
+            ))}
         </MapView>
         <View style={styles.searchForm}>
             <TextInput 
